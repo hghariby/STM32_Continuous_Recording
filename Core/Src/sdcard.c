@@ -73,26 +73,31 @@ static uint8_t SD_Test_CMD8(uint8_t *r7)
 static uint8_t SD_Init_ACMD41(void)
 {
     uint8_t r;
-    uint32_t timeout = 10000;
+    uint32_t timeout = 1000U;
 
     do
     {
         SD_SPI_Select();
-        r = SD_SendCmd(55, 0x00000000, 0x01);
+        r = SD_SendCmd(55, 0x00000000U, 0x01U);
         SD_SPI_Unselect();
 
-        if (r > 0x01)
+        if (r > 0x01U)
         {
             return r;
         }
 
         SD_SPI_Select();
-        r = SD_SendCmd(41, 0x40000000, 0x01);
+        r = SD_SendCmd(41, 0x40000000U, 0x01U);
         SD_SPI_Unselect();
 
-        timeout--;
+        if (r == 0x00U)
+        {
+            return r;
+        }
 
-    } while (r != 0x00 && timeout > 0);
+        HAL_Delay(1);
+
+    } while (--timeout > 0U);
 
     return r;
 }
@@ -265,68 +270,5 @@ uint8_t SD_WriteSector(
 
     SD_SPI_Unselect();
 
-    return SD_OK;
-}
-
-uint8_t SD_WriteSectors(uint32_t sector, const uint8_t *buffer, uint32_t count)
-{
-    uint8_t r;
-    uint8_t dataResponse;
-    uint32_t timeout;
-
-    if (buffer == NULL || count == 0U) return SD_ERROR;
-    if (count == 1U) return SD_WriteSector(sector, buffer);
-
-    SD_SPI_Select();
-    r = SD_SendCmd(25U, sector, 0x01U);   /* WRITE_MULTIPLE_BLOCK */
-    if (r != 0x00U)
-    {
-        SD_SPI_Unselect();
-        return SD_ERROR;
-    }
-
-    for (uint32_t block = 0U; block < count; block++)
-    {
-        SD_SPI_TxRx(0xFFU);
-        SD_SPI_TxRx(0xFCU);               /* multi-block data token */
-
-        if (SD_SPI_TransmitBuffer(buffer + block * 512U, 512U) != HAL_OK)
-        {
-            SD_SPI_Unselect();
-            return SD_ERROR;
-        }
-
-        SD_SPI_TxRx(0xFFU);
-        SD_SPI_TxRx(0xFFU);
-        dataResponse = SD_SPI_TxRx(0xFFU);
-        if ((dataResponse & 0x1FU) != 0x05U)
-        {
-            SD_SPI_Unselect();
-            return SD_ERROR;
-        }
-
-        timeout = 0x1FFFFFU;
-        while (SD_SPI_TxRx(0xFFU) == 0x00U)
-        {
-            if (--timeout == 0U)
-            {
-                SD_SPI_Unselect();
-                return SD_ERROR;
-            }
-        }
-    }
-
-    SD_SPI_TxRx(0xFDU);                   /* stop transmission token */
-    timeout = 0x1FFFFFU;
-    while (SD_SPI_TxRx(0xFFU) == 0x00U)
-    {
-        if (--timeout == 0U)
-        {
-            SD_SPI_Unselect();
-            return SD_ERROR;
-        }
-    }
-
-    SD_SPI_Unselect();
     return SD_OK;
 }

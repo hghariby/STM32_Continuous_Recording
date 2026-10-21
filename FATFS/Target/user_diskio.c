@@ -37,9 +37,6 @@
 #include "ff_gen_drv.h"
 #include "sdcard.h"
 
-/* Add this prototype to sdcard.h in your project as well. */
-extern uint8_t SD_WriteSectors(uint32_t sector, const uint8_t *buffer, uint32_t count);
-
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 
@@ -162,9 +159,17 @@ DRESULT USER_write (
         return RES_PARERR;
     }
 
-    if (SD_WriteSectors((uint32_t)sector, buff, (uint32_t)count) != SD_OK)
+    /*
+     * Conservative baseline: write one 512-byte sector at a time with CMD24.
+     * SD_WriteSector() waits for the card to finish programming before returning.
+     */
+    for (UINT i = 0U; i < count; i++)
     {
-        return RES_ERROR;
+        if (SD_WriteSector((uint32_t)sector + i,
+                           buff + ((uint32_t)i * 512U)) != SD_OK)
+        {
+            return RES_ERROR;
+        }
     }
 
     return RES_OK;

@@ -211,21 +211,55 @@ int main(void)
   FRESULT res = FR_OK;
   uint8_t sdReady = 0U;
 
+
   HAL_Delay(500);
 
-  res = f_mount(&fs, "", 1);
+  /*
+   * Try mounting the SD card several times.
+   * Do not allow recording to start unless mounting succeeds.
+   */
+  res = FR_NOT_READY;
+
+  for (uint32_t attempt = 0U; attempt < 5U; attempt++)
+  {
+      res = f_mount(&fs, "", 1);
+
+      if (res == FR_OK)
+      {
+          break;
+      }
+
+      HAL_Delay(500);
+  }
 
   if (res == FR_OK)
   {
-      /* Switch SD SPI to faster speed after successful initialization */
+      /*
+       * SD is confirmed ready.
+       */
       SD_SPI_SetFast();
 
-      /* Create recording directory */
-      /* SD mounted successfully - record directly in root directory. */
       Find_Next_File_Index();
+
       sdReady = 1U;
       startRequest = 1U;
   }
+  else
+  {
+      /*
+       * SD could not be mounted.
+       * Recording must NOT start.
+       */
+      sdReady = 0U;
+      startRequest = 0U;
+
+      HAL_GPIO_WritePin(
+          LD2_GPIO_Port,
+          LD2_Pin,
+          GPIO_PIN_RESET
+      );
+  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -731,7 +765,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 static void SD_SPI_SetFast(void)
 {
     HAL_SPI_DeInit(&hspi2);
-    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
 
     if (HAL_SPI_Init(&hspi2) != HAL_OK)
     {
